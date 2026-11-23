@@ -15,6 +15,15 @@ class QuickChecks(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'ancestor cone'):q.dependency_closure(self.root,['A0'],maximum=2)
  def test_comments_are_not_imports(self):
   p=self.source('A','/-\nimport Fake\n/-nested-/\n-/\nmodule\npublic import Actual -- comment\n\ndef x:=1\n');self.assertEqual(q.imports(p),['Actual'])
+ def test_comment_delimiter_in_body_string(self):
+  p=self.source('A', 'module\nimport B\ndef marker := "/-"\n')
+  self.assertEqual(q.imports(p), ['B'])
+ def test_block_comment_separates_header_tokens(self):
+  p=self.source('A', 'module\npublic/- outer /- inner -/ -/import B\nimport C\n')
+  self.assertEqual(q.imports(p), ['B', 'C'])
+ def test_unterminated_header_comment_deferred(self):
+  p=self.source('A', 'module\nimport B /- unfinished\n')
+  with self.assertRaisesRegex(ValueError, 'unterminated'):q.imports(p)
  def test_real_module_system_header(self):
   p=self.source('A','module\npublic meta import Foo\nimport all Bar\n\ndef x:=1\n');self.assertEqual(q.imports(p),['Foo','Bar'])
  def test_unrecognized_header_deferred(self):

@@ -27,26 +27,33 @@ def runner(identifier):
 
 def imports(path):
     if path.stat().st_size > 4 * 1024**2: raise ValueError('source/header exceeds quick-check limit')
-    text = path.read_text(); depth = 0; cleaned = []; i = 0
-    # Only the header is needed; preserve line positions across nested comments.
-    while i < len(text):
-        if text.startswith('/-', i): depth += 1; i += 2
-        elif depth and text.startswith('-/', i): depth -= 1; i += 2
-        elif not depth and text.startswith('--', i):
-            end = text.find('\n', i); i = len(text) if end < 0 else end
-        elif depth:
-            if text[i] == '\n': cleaned.append('\n')
-            i += 1
-        else: cleaned.append(text[i]); i += 1
-    if depth: raise ValueError('unterminated header/source comment')
     result = []
-    for line in ''.join(cleaned).splitlines():
-        line = line.strip()
-        if not line or line in ('module', 'prelude'): continue
-        match = re.fullmatch(r'(?:public\s+)?(?:meta\s+)?import(?:\s+all)?\s+([\w\']+(?:\.[\w\']+)*)', line)
-        if match: result.append(match[1]); continue
-        if re.match(r'(?:public\s+|meta\s+)*import\b', line): raise ValueError('unsupported import header')
-        break
+    depth = 0
+    with path.open() as source:
+        for line in source:
+            cleaned = []
+            i = 0
+            while i < len(line):
+                if line.startswith('/-', i):
+                    cleaned.append(' ')
+                    depth += 1
+                    i += 2
+                elif depth and line.startswith('-/', i):
+                    depth -= 1
+                    i += 2
+                elif not depth and line.startswith('--', i):
+                    break
+                else:
+                    if not depth:
+                        cleaned.append(line[i])
+                    i += 1
+            line = ''.join(cleaned).strip()
+            if not line or line in ('module', 'prelude'): continue
+            match = re.fullmatch(r'(?:public\s+)?(?:meta\s+)?import(?:\s+all)?\s+([\w\']+(?:\.[\w\']+)*)', line)
+            if match: result.append(match[1]); continue
+            if re.match(r'(?:public\s+|meta\s+)*import\b', line): raise ValueError('unsupported import header')
+            return result
+    if depth: raise ValueError('unterminated header/source comment')
     return result
 
 def dependency_closure(project, targets, maximum=MAX_CLOSURE):
